@@ -1,7 +1,7 @@
 {
   "name": "drupal/commerce_paypal_ec",
   "type": "drupal-module",
-  "description": "Headless implementation of PayPal Payments for Drupal Commerce.",
+  "description": "Implementation of Express Checkout feature of PayPal for Drupal Commerce.",
   "homepage": "http://drupal.org/project/commerce_paypal_ec",
   "license": "GPL-2.0+",
   "require": {
