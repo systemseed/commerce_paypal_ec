@@ -1,0 +1,7 @@
+name: Commerce Paypal Express Checkout
+type: module
+description: Implementation of Express Checkout feature of PayPal for Drupal Commerce.
+package: Commerce (contrib)
+core: 8.x
+dependencies:
+  - commerce:commerce_payment

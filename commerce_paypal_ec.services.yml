@@ -1,0 +1,10 @@
+services:
+
+  commerce_paypal_ec.paypal:
+    class: Drupal\commerce_paypal_ec\PayPal
+    arguments: ['@commerce_paypal_ec.logger']
+
+  commerce_paypal_ec.logger:
+    class: Drupal\Core\Logger\LoggerChannel
+    factory: logger.factory:get
+    arguments: ['commerce_paypal_ec']

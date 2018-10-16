@@ -1,0 +1,11 @@
+{
+  "name": "drupal/commerce_paypal_ec",
+  "type": "drupal-module",
+  "description": "Headless implementation of PayPal Payments for Drupal Commerce.",
+  "homepage": "http://drupal.org/project/commerce_paypal_ec",
+  "license": "GPL-2.0+",
+  "require": {
+    "drupal/commerce": "~2",
+    "paypal/rest-api-sdk-php": "*"
+  }
+}
