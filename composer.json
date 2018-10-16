@@ -4,8 +4,14 @@
   "description": "Implementation of Express Checkout feature of PayPal for Drupal Commerce.",
   "homepage": "http://drupal.org/project/commerce_paypal_ec",
   "license": "GPL-2.0+",
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "git@github.com:srjlewis/PayPal-PHP-SDK.git"
+    }
+  ],
   "require": {
     "drupal/commerce": "~2",
-    "paypal/rest-api-sdk-php": "*"
+    "paypal/rest-api-sdk-php": "dev-master"
   }
 }
