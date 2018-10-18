@@ -10,6 +10,7 @@ use Psr\Log\LoggerInterface;
  * Wrapper around current Drupal logger to skip DEBUG log messages from PayPal.
  */
 class PaypalLogger implements LoggerInterface {
+
   use RfcLoggerTrait;
 
   /* @var \Psr\Log\LoggerInterface */

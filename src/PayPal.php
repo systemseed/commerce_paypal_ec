@@ -51,8 +51,7 @@ class PayPal implements PayPalInterface {
 
     $this->apiContext->setConfig([
       'mode' => $mode === 'live' ? 'live' : 'sandbox',
-      // TODO.
-      //'log.AdapterFactory' => '\Drupal\commerce_paypal_ec\PaypalLogFactory',
+      'log.AdapterFactory' => '\Drupal\commerce_paypal_ec\PaypalLogFactory',
       // Use cache file to improve PayPal SDK performance.
       'cache.enabled' => TRUE,
       'cache.FileName' => 'private://paypal/paypal_sdk.auth.cache',

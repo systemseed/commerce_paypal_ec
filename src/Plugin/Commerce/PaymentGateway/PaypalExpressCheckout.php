@@ -97,6 +97,7 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
     return [
         'client_id' => '',
         'client_secret' => '',
+        'recurring_start_date' => 0,
       ] + parent::defaultConfiguration();
   }
 
@@ -122,6 +123,14 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
       '#required' => TRUE,
     ];
 
+    $form['recurring_start_date'] = [
+      '#type' => 'select',
+      '#title' => t('Select when to start billing recurring payments'),
+      '#description' => t('Choose "0" to start billing as soon as payment is made, otherwise choose day of the month when the first billing should be made.'),
+      '#options' => range(0, 31),
+      '#default_value' => $this->configuration['recurring_start_date'],
+    ];
+
     return $form;
   }
 
@@ -135,6 +144,7 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
       $values = $form_state->getValue($form['#parents']);
       $this->configuration['client_id'] = $values['client_id'];
       $this->configuration['client_secret'] = $values['client_secret'];
+      $this->configuration['recurring_start_date'] = $values['recurring_start_date'];
     }
   }
 
@@ -153,6 +163,14 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
 
     if (!in_array($payment_details['type'], ['single', 'subscription'])) {
       throw new \InvalidArgumentException(sprintf('Payment type should be either "single" or "subscription", %s given instead.', $payment_details['type']));
+    }
+
+    if ($payment_details['type'] == 'single' && !empty($payment_details['transactions']) && count($payment_details['transactions']) > 1) {
+      throw new \InvalidArgumentException(sprintf('We do not support more than 1 transaction for security reasons.'));
+    }
+
+    if ($payment_details['type'] == 'subscription' && !empty($payment_details['payment_definitions']) && count($payment_details['payment_definitions']) > 1) {
+      throw new \InvalidArgumentException(sprintf('We do not support more than 1 payment definition for security reasons.'));
     }
 
     // Actually save payment type value in the database.
@@ -180,11 +198,89 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
     }
 
     try {
-      $payment_method = $payment->getPaymentMethod();
-      $this->assertPaymentMethod($payment_method);
 
+      // Get created payment method.
+      $payment_method = $payment->getPaymentMethod();
+
+      // Get payment type (single or subscription) and payment payload
+      // sent from the frontend.
       $payment_type = $payment_method->payment_type->value;
       $payment_details = $payment_method->payment_details;
+
+      // Grab the order details.
+      $order = $payment->getOrder();
+
+      // Fill some of the values for single payment payload from the order.
+      if ($payment_type == 'single') {
+
+        // Pre-populate array with default values if they were not set by
+        // the frontend.
+        $payment_details += [
+          'intent' => 'sale',
+          'payer' => [
+            'payment_method' => 'paypal',
+          ],
+        ];
+
+        $payment_details['redirect_urls']['return_url'] = \Drupal::request()->getSchemeAndHttpHost();
+        $payment_details['redirect_urls']['cancel_url'] = \Drupal::request()->getSchemeAndHttpHost();
+
+        $payment_details['transactions'][0]['amount'] = [
+          'currency' => $order->getTotalPrice()->getCurrencyCode(),
+          'total' => $order->getTotalPrice()->getNumber(),
+        ];
+
+        // Don't let frontend define items - it should be added from
+        // the order.
+        unset($payment_details['transactions'][0]['item_list']['items']);
+        foreach ($order->getItems() as $orderItem) {
+          $payment_details['transactions'][0]['item_list']['items'][] = [
+            'name' => $orderItem->getTitle(),
+            'currency' => $orderItem->getTotalPrice()->getCurrencyCode(),
+            'price' => $orderItem->getTotalPrice()->getNumber(),
+            'quantity' => (int) $orderItem->getQuantity(),
+          ];
+        }
+      }
+      // Fill some of the values for subscription payment payload from the order.
+      elseif ($payment_type == 'subscription') {
+
+        // Prefill merchant preferences with old school url values.
+        $payment_details['billing_plan']['merchant_preferences']['return_url'] = \Drupal::request()->getSchemeAndHttpHost();
+        $payment_details['billing_plan']['merchant_preferences']['cancel_url'] = \Drupal::request()->getSchemeAndHttpHost();
+
+        // Hard set payment amount from the order.
+        $payment_details['billing_plan']['payment_definitions'][0]['amount'] = [
+          'value' => $order->getTotalPrice()->getNumber(),
+          'currency' => $order->getTotalPrice()->getCurrencyCode(),
+        ];
+
+        $recurring_start_date = $this->configuration['recurring_start_date'];
+
+        // If recurring date is empty, means that we should start billing
+        // recurring payment immediately after the payment is made.
+        if (empty($recurring_start_date)) {
+          $datetime = new \DateTime();
+          // Give a user time to complete the transaction.
+          $datetime->modify('+15 minutes');
+        }
+        else {
+          $datetime = new \DateTime();
+          $day_of_month = $datetime->format('j');
+          // If the current day of the month is leaser than day when to start
+          // billing, then we need to set the payment for this month, otherwise
+          // it will be the next month.
+          if ($day_of_month >= $recurring_start_date) {
+            $datetime->modify('+1 month');
+          }
+          $date = $datetime->format('Y') . '-' . $datetime->format('m') . '-' . $recurring_start_date;
+          $datetime = new \DateTime($date);
+        }
+
+        // Set the date of the first recurring payment.
+        $payment_details['billing_agreement']['start_date'] = $datetime->format(\DateTime::ATOM);
+      }
+
       if ($payment_type == 'subscription') {
         $token = $this->payPal->createSubscriptionPayment($payment_details);
       }

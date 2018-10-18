@@ -7,3 +7,6 @@ commerce_payment.commerce_payment_gateway.plugin.commerce_paypal_ec:
     client_secret:
       type: string
       label: 'REST Client Secret'
+    recurring_start_date:
+      type: integer
+      label: 'Recurring billing start date'
