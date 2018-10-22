@@ -38,8 +38,13 @@ class PayPal implements PayPalInterface {
 
   /**
    * @param $client_id
+   *   PayPal REST client ID.
+   *
    * @param $client_secret
+   *   PayPal REST client secret string.
+   *
    * @param string $mode
+   *   Payment mode (live or sandbox).
    *
    * @return $this
    */
@@ -129,9 +134,6 @@ class PayPal implements PayPalInterface {
    * @param $paymentID
    *   Payment ID returned from PayPal.
    *
-   * @param $payerID
-   *   Payer ID returned from PayPal.
-   *
    * @return bool
    *   TRUE or FALSE depending on transaction's success.
    */
@@ -139,11 +141,16 @@ class PayPal implements PayPalInterface {
 
     // Load payment details from PayPal.
     $paypalPayment = Payment::get($paymentID, $this->apiContext);
-    $payerID = $paypalPayment->getPayer()->getPayerInfo()->getPayerId();
 
     // Create a new PayPal payment execution object.
     $paymentExecution = new PaymentExecution();
-    $paymentExecution->setPayerId($payerID);
+
+    // Set payer ID from the PayPal's payment details.
+    $payer = $paypalPayment->getPayer();
+    if (!empty($payer)) {
+      $payerID = $payer->getPayerInfo()->getPayerId();
+      $paymentExecution->setPayerId($payerID);
+    }
 
     // Fetch existing PayPal payment & execute it.
     $result = $paypalPayment->execute($paymentExecution, $this->apiContext);

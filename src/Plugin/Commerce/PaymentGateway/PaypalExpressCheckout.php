@@ -197,105 +197,104 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
       return;
     }
 
-    try {
+    // Get created payment method.
+    $payment_method = $payment->getPaymentMethod();
 
-      // Get created payment method.
-      $payment_method = $payment->getPaymentMethod();
+    // Get payment type (single or subscription) and payment payload
+    // sent from the frontend.
+    $payment_type = $payment_method->payment_type->value;
+    $payment_details = $payment_method->payment_details;
 
-      // Get payment type (single or subscription) and payment payload
-      // sent from the frontend.
-      $payment_type = $payment_method->payment_type->value;
-      $payment_details = $payment_method->payment_details;
+    // Grab the order details.
+    $order = $payment->getOrder();
 
-      // Grab the order details.
-      $order = $payment->getOrder();
+    // Fill some of the values for single payment payload from the order.
+    if ($payment_type == 'single') {
 
-      // Fill some of the values for single payment payload from the order.
-      if ($payment_type == 'single') {
+      // Pre-populate array with default values if they were not set by
+      // the frontend.
+      $payment_details += [
+        'intent' => 'sale',
+        'payer' => [
+          'payment_method' => 'paypal',
+        ],
+      ];
 
-        // Pre-populate array with default values if they were not set by
-        // the frontend.
-        $payment_details += [
-          'intent' => 'sale',
-          'payer' => [
-            'payment_method' => 'paypal',
-          ],
+      $payment_details['redirect_urls']['return_url'] = \Drupal::request()
+        ->getSchemeAndHttpHost();
+      $payment_details['redirect_urls']['cancel_url'] = \Drupal::request()
+        ->getSchemeAndHttpHost();
+
+      $payment_details['transactions'][0]['amount'] = [
+        'currency' => $order->getTotalPrice()->getCurrencyCode(),
+        'total' => $order->getTotalPrice()->getNumber(),
+      ];
+
+      // Don't let frontend define items - it should be added from
+      // the order.
+      unset($payment_details['transactions'][0]['item_list']['items']);
+      foreach ($order->getItems() as $orderItem) {
+        $payment_details['transactions'][0]['item_list']['items'][] = [
+          'name' => $orderItem->getTitle(),
+          'currency' => $orderItem->getTotalPrice()->getCurrencyCode(),
+          'price' => $orderItem->getTotalPrice()->getNumber(),
+          'quantity' => (int) $orderItem->getQuantity(),
         ];
+      }
+    }
+    // Fill some of the values for subscription payment payload from the order.
+    elseif ($payment_type == 'subscription') {
 
-        $payment_details['redirect_urls']['return_url'] = \Drupal::request()->getSchemeAndHttpHost();
-        $payment_details['redirect_urls']['cancel_url'] = \Drupal::request()->getSchemeAndHttpHost();
+      // Prefill merchant preferences with old school url values.
+      $payment_details['billing_plan']['merchant_preferences']['return_url'] = \Drupal::request()
+        ->getSchemeAndHttpHost();
+      $payment_details['billing_plan']['merchant_preferences']['cancel_url'] = \Drupal::request()
+        ->getSchemeAndHttpHost();
 
-        $payment_details['transactions'][0]['amount'] = [
-          'currency' => $order->getTotalPrice()->getCurrencyCode(),
-          'total' => $order->getTotalPrice()->getNumber(),
-        ];
+      // Hard set payment amount from the order.
+      $payment_details['billing_plan']['payment_definitions'][0]['amount'] = [
+        'value' => $order->getTotalPrice()->getNumber(),
+        'currency' => $order->getTotalPrice()->getCurrencyCode(),
+      ];
 
-        // Don't let frontend define items - it should be added from
-        // the order.
-        unset($payment_details['transactions'][0]['item_list']['items']);
-        foreach ($order->getItems() as $orderItem) {
-          $payment_details['transactions'][0]['item_list']['items'][] = [
-            'name' => $orderItem->getTitle(),
-            'currency' => $orderItem->getTotalPrice()->getCurrencyCode(),
-            'price' => $orderItem->getTotalPrice()->getNumber(),
-            'quantity' => (int) $orderItem->getQuantity(),
-          ];
+      $recurring_start_date = $this->configuration['recurring_start_date'];
+
+      // If recurring date is empty, means that we should start billing
+      // recurring payment immediately after the payment is made.
+      if (empty($recurring_start_date)) {
+        $datetime = new \DateTime();
+        // Give a user time to complete the transaction.
+        $datetime->modify('+15 minutes');
+      }
+      else {
+        $datetime = new \DateTime();
+        $day_of_month = $datetime->format('j');
+        // If the current day of the month is leaser than day when to start
+        // billing, then we need to set the payment for this month, otherwise
+        // it will be the next month.
+        if ($day_of_month >= $recurring_start_date) {
+          $datetime->modify('+1 month');
         }
-      }
-      // Fill some of the values for subscription payment payload from the order.
-      elseif ($payment_type == 'subscription') {
-
-        // Prefill merchant preferences with old school url values.
-        $payment_details['billing_plan']['merchant_preferences']['return_url'] = \Drupal::request()->getSchemeAndHttpHost();
-        $payment_details['billing_plan']['merchant_preferences']['cancel_url'] = \Drupal::request()->getSchemeAndHttpHost();
-
-        // Hard set payment amount from the order.
-        $payment_details['billing_plan']['payment_definitions'][0]['amount'] = [
-          'value' => $order->getTotalPrice()->getNumber(),
-          'currency' => $order->getTotalPrice()->getCurrencyCode(),
-        ];
-
-        $recurring_start_date = $this->configuration['recurring_start_date'];
-
-        // If recurring date is empty, means that we should start billing
-        // recurring payment immediately after the payment is made.
-        if (empty($recurring_start_date)) {
-          $datetime = new \DateTime();
-          // Give a user time to complete the transaction.
-          $datetime->modify('+15 minutes');
-        }
-        else {
-          $datetime = new \DateTime();
-          $day_of_month = $datetime->format('j');
-          // If the current day of the month is leaser than day when to start
-          // billing, then we need to set the payment for this month, otherwise
-          // it will be the next month.
-          if ($day_of_month >= $recurring_start_date) {
-            $datetime->modify('+1 month');
-          }
-          $date = $datetime->format('Y') . '-' . $datetime->format('m') . '-' . $recurring_start_date;
-          $datetime = new \DateTime($date);
-        }
-
-        // Set the date of the first recurring payment.
-        $payment_details['billing_agreement']['start_date'] = $datetime->format(\DateTime::ATOM);
+        $date = $datetime->format('Y') . '-' . $datetime->format('m') . '-' . $recurring_start_date;
+        $datetime = new \DateTime($date);
       }
 
-      if ($payment_type == 'subscription') {
-        $token = $this->payPal->createSubscriptionPayment($payment_details);
-      }
-      elseif ($payment_type == 'single') {
-        $token = $this->payPal->createSinglePayment($payment_details);
-      }
+      // Set the date of the first recurring payment.
+      $payment_details['billing_agreement']['start_date'] = $datetime->format(\DateTime::ATOM);
+    }
 
-      if (!empty($token)) {
-        $payment_method->setRemoteId($token);
-        $payment_method->save();
-        $payment->setRemoteId($token);
-        $payment->save();
-      }
-    } catch (\Exception $exception) {
-      $this->logger->error($exception->getMessage());
+    if ($payment_type == 'subscription') {
+      $token = $this->payPal->createSubscriptionPayment($payment_details);
+    }
+    elseif ($payment_type == 'single') {
+      $token = $this->payPal->createSinglePayment($payment_details);
+    }
+
+    if (!empty($token)) {
+      $payment_method->setRemoteId($token);
+      $payment_method->save();
+      $payment->setRemoteId($token);
+      $payment->save();
     }
   }
 
@@ -303,27 +302,22 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteIn
    * {@inheritdoc}
    */
   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
-    try {
-      $payment_method = $payment->getPaymentMethod();
-      $payment_type = $payment_method->payment_type->value;
+    $payment_method = $payment->getPaymentMethod();
+    $payment_type = $payment_method->payment_type->value;
 
-      if ($payment_type == 'single') {
-        $success = $this->payPal->executeSinglePayment($payment_method->getRemoteId());
-      }
-      elseif ($payment_type == 'subscription') {
-        $success = $this->payPal->executeSubscriptionPayment($payment_method->getRemoteId());
-      }
+    if ($payment_type == 'single') {
+      $success = $this->payPal->executeSinglePayment($payment_method->getRemoteId());
+    }
+    elseif ($payment_type == 'subscription') {
+      $success = $this->payPal->executeSubscriptionPayment($payment_method->getRemoteId());
+    }
 
-      // Save payment internally.
-      if (!empty($success)) {
-        $payment->setState('completed');
-        $payment->setAuthorizedTime($this->time->getRequestTime());
-        $payment->setExpiresTime($this->time->getRequestTime() + (86400 * 29));
-        $payment->save();
-      }
-
-    } catch (\Exception $exception) {
-      $this->logger->error($exception->getMessage());
+    // Save payment internally.
+    if (!empty($success)) {
+      $payment->setState('completed');
+      $payment->setAuthorizedTime($this->time->getRequestTime());
+      $payment->setExpiresTime($this->time->getRequestTime() + (86400 * 29));
+      $payment->save();
     }
   }
 
