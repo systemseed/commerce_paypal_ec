@@ -8,7 +8,6 @@ use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
-use Drupal\commerce_payment_example\Plugin\Commerce\PaymentGateway\OnsiteInterface;
 use Drupal\commerce_price\Price;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -26,7 +25,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   payment_method_types = {"paypal_ec"},
  * )
  */
-class PaypalExpressCheckout extends OnsitePaymentGatewayBase implements OnsiteInterface {
+class PaypalExpressCheckout extends OnsitePaymentGatewayBase {
 
   /**
    * @var \Drupal\commerce_paypal_ec\PayPalInterface
