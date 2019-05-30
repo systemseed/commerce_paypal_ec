@@ -259,11 +259,10 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase {
       $recurring_start_date = $this->configuration['recurring_start_date'];
 
       // If recurring date is empty, means that we should start billing
-      // recurring payment immediately after the payment is made.
+      // recurring payment as soon as possible - in PayPal terms it's at least +24 hrs.
       if (empty($recurring_start_date)) {
         $datetime = new \DateTime();
-        // Give a user time to complete the transaction.
-        $datetime->modify('+15 minutes');
+        $datetime->modify('+25 hours');
       }
       else {
         $datetime = new \DateTime();
@@ -275,7 +274,12 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase {
           $datetime->modify('+1 month');
         }
         $date = $datetime->format('Y') . '-' . $datetime->format('m') . '-' . $recurring_start_date;
+
+        // Due to details of PayPal dates conversion (see
+        // https://developer.paypal.com/docs/api/payments.billing-agreements/v1/)
+        // we need to set the mid of the day to start the payment when expected.
         $datetime = new \DateTime($date);
+        $datetime->modify('+12 hours');
       }
 
       // Set the date of the first recurring payment.
