@@ -134,8 +134,8 @@ class PayPal implements PayPalInterface {
    * @param $paymentID
    *   Payment ID returned from PayPal.
    *
-   * @return bool
-   *   TRUE or FALSE depending on transaction's success.
+   * @return string|bool
+   *   PayPal payment id or FALSE depending on transaction's success.
    */
   public function executeSinglePayment($paymentID) {
 
@@ -154,7 +154,7 @@ class PayPal implements PayPalInterface {
 
     // Fetch existing PayPal payment & execute it.
     $result = $paypalPayment->execute($paymentExecution, $this->apiContext);
-    return $result->getState() == 'approved' ? TRUE : FALSE;
+    return $result->getState() == 'approved' ? $result->getId() : FALSE;
   }
 
   /**
@@ -164,8 +164,8 @@ class PayPal implements PayPalInterface {
    * @param $agreementID
    *   Subscription ID returned from PayPal
    *
-   * @return bool
-   *   TRUE or FALSE depending on transaction's success.
+   * @return string|bool
+   *   PayPal payment id or FALSE depending on transaction's success.
    */
   public function executeSubscriptionPayment($agreementID) {
 
@@ -173,7 +173,7 @@ class PayPal implements PayPalInterface {
     // confirmed by a client in a checkout popup.
     $agreement = new Agreement();
     $result = $agreement->execute($agreementID, $this->apiContext);
-    return $result->getState() == 'Active' ? TRUE : FALSE;
+    return $result->getState() == 'Active' ? $result->getId() : FALSE;
   }
 
   /**

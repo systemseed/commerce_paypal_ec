@@ -309,18 +309,25 @@ class PaypalExpressCheckout extends OnsitePaymentGatewayBase {
     $payment_type = $payment_method->payment_type->value;
 
     if ($payment_type == 'single') {
-      $success = $this->payPal->executeSinglePayment($payment_method->getRemoteId());
+      $remote_id = $this->payPal->executeSinglePayment($payment_method->getRemoteId());
     }
     elseif ($payment_type == 'subscription') {
-      $success = $this->payPal->executeSubscriptionPayment($payment_method->getRemoteId());
+      $remote_id = $this->payPal->executeSubscriptionPayment($payment_method->getRemoteId());
     }
 
     // Save payment internally.
-    if (!empty($success)) {
+    if (!empty($remote_id)) {
       $payment->setState('completed');
       $payment->setAuthorizedTime($this->time->getRequestTime());
       $payment->setExpiresTime($this->time->getRequestTime() + (86400 * 29));
+      $payment->setRemoteId($remote_id);
+
       $payment->save();
+
+      // Remote id may have changed during payment capturing so we save
+      // the most recent value again.
+      $payment_method->setRemoteId($remote_id);
+      $payment_method->save();
     }
   }
 
